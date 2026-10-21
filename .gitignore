@@ -1,0 +1,31 @@
+# Node & Frontend
+node_modules/
+dist/
+dist-electron/
+.vite/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.sqlite3
+*.db
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+.env.*
+!.env.example

@@ -1,0 +1,21 @@
+{
+  "name": "manoeuvre",
+  "version": "1.0.0",
+  "description": "Manoeuvre: AI-Powered Wearable Teaching Assistant",
+  "main": "electron/dist/main.js",
+  "scripts": {
+    "start:backend": "py -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload",
+    "start:frontend": "cd frontend && npm run dev",
+    "start:simulator": "py scripts/device_simulator.py --interactive",
+    "test:backend": "py -m pytest backend/tests -v",
+    "test:frontend": "cd frontend && npm run test:run",
+    "test:all": "npm run test:backend && npm run test:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "electron:dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^30.0.9",
+    "typescript": "^5.4.5"
+  }
+}
