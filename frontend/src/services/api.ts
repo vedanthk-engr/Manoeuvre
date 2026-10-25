@@ -1,7 +1,10 @@
-const BASE_URL = 'http://127.0.0.1:8000';
+const BASE_URL = typeof window !== 'undefined' && (window.location.port === '5173' || window.location.hostname === 'localhost')
+  ? ''
+  : 'http://127.0.0.1:8000';
 
 async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -29,6 +32,7 @@ export const api = {
   // Presentation
   getPresentationState: () => fetchJson<any>('/api/presentation/state'),
   listPresentations: () => fetchJson<any[]>('/api/presentation/list'),
+  getPresentationSlides: (id: string) => fetchJson<any[]>(`/api/presentation/slides/${id}`),
   selectPresentation: (id: string) => fetchJson<any>(`/api/presentation/select/${id}`, { method: 'POST' }),
   nextSlide: () => fetchJson<any>('/api/presentation/next', { method: 'POST' }),
   prevSlide: () => fetchJson<any>('/api/presentation/prev', { method: 'POST' }),
@@ -37,11 +41,27 @@ export const api = {
     const formData = new FormData();
     formData.append('file', file);
     if (title) formData.append('title', title);
-    const res = await fetch(`${BASE_URL}/api/presentation/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) throw new Error(await res.text());
+    
+    // Attempt proxied/relative endpoint first, fall back to direct port 8000 if needed
+    const uploadUrl = `${BASE_URL}/api/presentation/upload`;
+    let res: Response;
+    try {
+      res = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (netErr) {
+      // Direct fallback
+      res = await fetch('http://127.0.0.1:8000/api/presentation/upload', {
+        method: 'POST',
+        body: formData,
+      });
+    }
+
+    if (!res.ok) {
+      const errTxt = await res.text();
+      throw new Error(errTxt || `Upload failed with HTTP ${res.status}`);
+    }
     return res.json();
   },
 
@@ -68,6 +88,11 @@ export const api = {
     fetchJson<any>('/api/ai/query', {
       method: 'POST',
       body: JSON.stringify({ action, slide_index: slideIndex, custom_prompt: customPrompt, focus }),
+    }),
+  queryAI: (action: string, customPrompt?: string, slideIndex?: number) =>
+    fetchJson<any>('/api/ai/query', {
+      method: 'POST',
+      body: JSON.stringify({ action, slide_index: slideIndex, custom_prompt: customPrompt }),
     }),
   toggleSpeechRecording: () => fetchJson<any>('/api/ai/speech/toggle', { method: 'POST' }),
   getAiHistory: (sessionId: string) => fetchJson<any[]>(`/api/ai/history/${sessionId}`),
