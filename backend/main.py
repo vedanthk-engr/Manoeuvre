@@ -65,9 +65,10 @@ async def health_check():
     }
 
 # -------------------------------------------------------------
-# WebSocket: Hardware Device (ESP32 Glove or Simulator)
+# WebSocket: Hardware Device (NodeMCU ESP8266, ESP32, or Simulator)
 # -------------------------------------------------------------
 @app.websocket("/ws/device")
+@app.websocket("/ws")
 async def device_websocket_endpoint(websocket: WebSocket):
     await connection_manager.connect_device(websocket)
     try:
@@ -76,12 +77,11 @@ async def device_websocket_endpoint(websocket: WebSocket):
             await dispatcher.handle_message(data)
     except WebSocketDisconnect:
         connection_manager.disconnect_device()
-        await connection_manager.broadcast_to_desktop({
-            "type": "device_disconnected"
-        })
+        await dispatcher.handle_disconnect()
     except Exception as e:
         logger.error(f"[WS DEVICE] Error in connection loop: {e}")
         connection_manager.disconnect_device()
+        await dispatcher.handle_disconnect()
 
 # -------------------------------------------------------------
 # WebSocket: Desktop Studio & Overlay
