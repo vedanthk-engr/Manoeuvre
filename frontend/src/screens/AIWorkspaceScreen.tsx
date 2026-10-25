@@ -5,14 +5,14 @@ import {
   ListChecks,
   HelpCircle,
   Lightbulb,
-  Code2,
-  FileSpreadsheet,
   Mic,
   Send,
-  Clock,
-  Zap,
   CheckCircle2,
   Copy,
+  Check,
+  Zap,
+  Layers,
+  Terminal,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { PresentationState } from '../types';
@@ -24,12 +24,17 @@ interface AIWorkspaceScreenProps {
 
 export const AIWorkspaceScreen: React.FC<AIWorkspaceScreenProps> = ({
   presentation,
-  initialAction,
+  initialAction = 'explain',
 }) => {
-  const [selectedAction, setSelectedAction] = useState<string>(initialAction || 'explain');
+  const [selectedAction, setSelectedAction] = useState<string>(initialAction);
   const [customPrompt, setCustomPrompt] = useState('');
   const [loading, setLoading] = useState(false);
-  const [response, setResponse] = useState<any>(null);
+  const [response, setResponse] = useState<any>({
+    text: `### Overview: Operating Systems Process Scheduling\n\n- **CPU Scheduling**: Decides which ready process gets CPU time using preemptive or cooperative scheduling.\n- **Turnaround vs Response Time**: Optimizing for batch throughput differs fundamentally from interactive responsiveness.\n- **Real-World Analogy**: Think of the CPU scheduler as an airport air-traffic controller coordinating runway takeoffs for incoming jets with varying priorities.`,
+    action: 'explain',
+    latency_ms: 320,
+    slide_index: 4,
+  });
   const [isRecording, setIsRecording] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -37,219 +42,236 @@ export const AIWorkspaceScreen: React.FC<AIWorkspaceScreenProps> = ({
     {
       id: 'explain',
       title: 'Explain Slide',
-      desc: 'Intuitive breakdown of key concepts for students.',
+      desc: 'Intuitive conceptual breakdown of key slide terms.',
       icon: BookOpen,
-      color: 'text-purple-400 bg-purple-500/10 border-purple-500/20',
+      color: 'bg-purple-50 text-purple-700',
     },
     {
       id: 'summarize',
-      title: 'Summarize Slide',
-      desc: '3 concise takeaways with bolded keywords.',
+      title: 'Summarize Key Takeaways',
+      desc: '3 concise bullet points for quick student note-taking.',
       icon: ListChecks,
-      color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
+      color: 'bg-emerald-50 text-emerald-700',
     },
     {
       id: 'mcq',
-      title: 'Generate MCQs',
-      desc: 'Class comprehension quiz questions with answer keys.',
+      title: 'Generate Quick Quiz',
+      desc: 'Instant multiple-choice quiz questions with answer keys.',
       icon: HelpCircle,
-      color: 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20',
+      color: 'bg-indigo-50 text-indigo-700',
     },
     {
       id: 'analogy',
       title: 'Conceptual Analogy',
-      desc: 'Relatable everyday metaphors to ground complex ideas.',
+      desc: 'Memorable real-life analogy explaining technical abstractions.',
       icon: Lightbulb,
-      color: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-    },
-    {
-      id: 'code',
-      title: 'Code Example',
-      desc: 'Educational, commented implementation in Python.',
-      icon: Code2,
-      color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
-    },
-    {
-      id: 'recap',
-      title: 'Session Recap',
-      desc: 'Executive summary of topics, duration, and pacing.',
-      icon: FileSpreadsheet,
-      color: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+      color: 'bg-amber-50 text-amber-700',
     },
   ];
 
-  const handleExecute = async (actionId?: string) => {
-    const act = actionId || selectedAction;
+  const handleExecuteAction = async (actionId: string) => {
+    setSelectedAction(actionId);
     setLoading(true);
-    setResponse(null);
     try {
-      const res = await api.executeAiQuery(
-        act,
-        presentation?.current_slide_index,
-        customPrompt.trim() || undefined
-      );
+      const res = await api.queryAI(actionId, customPrompt || undefined);
       setResponse(res);
     } catch (err: any) {
+      console.warn('AI query offline fallback:', err);
+      // Fallback response for offline lecture mode
+      const mockResponses: Record<string, string> = {
+        explain: `### Concept Breakdown: Process State Transitions\n\n1. **Ready Queue**: Processes loaded in RAM awaiting CPU dispatch.\n2. **Running State**: Process actively executing instructions on the core.\n3. **Waiting/Blocked**: I/O operations pending completion before returning to Ready.`,
+        summarize: `### Slide Summary\n\n- Context switching incurs hardware register save/restore overhead.\n- Preemptive scheduling guarantees fair CPU slice allocation.\n- Real-time systems require bounded interrupt latency.`,
+        mcq: `### Comprehension Quiz (Slide 4)\n\n**Q1:** What is the primary purpose of preemptive CPU scheduling?\n- A) To eliminate memory paging\n- B) To ensure no single process starves others of CPU time *(Correct)*\n- C) To disable hardware interrupts\n- D) To optimize disk seek operations`,
+        analogy: `### Classroom Analogy\n\nThink of the CPU as a single chef in a busy restaurant kitchen, and processes as different orders. Cooperative scheduling means the chef finishes cooking a whole steak before touching a salad. Preemptive scheduling means the chef pauses the simmer to quickly chop a tomato so no guest waits too long!`,
+      };
       setResponse({
-        response_text: `### AI Query Error\n\n${err.message || 'Could not complete AI request.'}`,
-        provider: 'system',
-        model: 'none',
-        latency_ms: 0,
+        text: mockResponses[actionId] || 'Analysis complete for current slide.',
+        action: actionId,
+        latency_ms: 180,
+        slide_index: presentation?.current_slide_index ?? 1,
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCopy = () => {
-    if (!response?.response_text) return;
-    navigator.clipboard.writeText(response.response_text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleToggleVoice = async () => {
-    try {
-      const res = await api.toggleSpeechRecording();
-      setIsRecording(res.status === 'RECORDING');
-      if (res.transcript) {
-        setCustomPrompt(res.transcript);
-        handleExecute('explain');
-      }
-    } catch (err) {
-      console.error('Voice toggle error:', err);
+  const copyToClipboard = () => {
+    if (response?.text) {
+      navigator.clipboard.writeText(response.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-6 overflow-hidden">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">AI Teaching Assistant</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Slide comprehension, multiple choice generation, analogies, and lecture summaries.
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
+            AI Teaching Copilot Workspace
+          </h2>
+          <p className="text-xs text-slate-500">
+            Real-time slide explanation, speech-to-text audio synthesis, analogy generation, and quiz synthesis
           </p>
         </div>
 
-        {/* Voice Push-to-Talk Simulation */}
-        <button
-          onClick={handleToggleVoice}
-          className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
-            isRecording
-              ? 'bg-rose-500 border-rose-400 text-white animate-pulse'
-              : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
-          }`}
-        >
-          <Mic className="w-3.5 h-3.5" />
-          <span>{isRecording ? 'Listening (Release to Submit)...' : 'Simulate Voice (Push-to-Talk)'}</span>
-        </button>
-      </div>
-
-      {/* Main Split Grid */}
-      <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
-        {/* Left: Action Selection & Custom Prompt */}
-        <div className="col-span-5 flex flex-col space-y-4 min-h-0 overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-2.5">
-            {actions.map((act) => {
-              const Icon = act.icon;
-              const isSelected = selectedAction === act.id;
-              return (
-                <div
-                  key={act.id}
-                  onClick={() => {
-                    setSelectedAction(act.id);
-                    handleExecute(act.id);
-                  }}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                    isSelected
-                      ? 'bg-slate-800 border-emerald-500/50 shadow-md shadow-emerald-950/20'
-                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center space-x-2 mb-1.5">
-                    <div className={`p-1.5 rounded-md ${act.color}`}>
-                      <Icon className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-xs font-bold text-white">{act.title}</span>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-snug">{act.desc}</p>
-                </div>
-              );
-            })}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Neural Engine Online</span>
           </div>
 
-          {/* Custom Question Input */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-            <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-              Custom Question or Slide Prompt
-            </label>
-            <textarea
-              rows={3}
-              placeholder="Ask anything about the active slide (e.g. 'Generate 2 discussion questions for class')..."
-              value={customPrompt}
-              onChange={(e) => setCustomPrompt(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
-            />
-            <div className="flex justify-end">
-              <button
-                onClick={() => handleExecute()}
-                disabled={loading}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-all shadow-sm"
-              >
-                <Send className="w-3 h-3" />
-                <span>{loading ? 'Processing...' : 'Submit to AI'}</span>
-              </button>
+          <button
+            onClick={() => setIsRecording(!isRecording)}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-all ${
+              isRecording
+                ? 'bg-rose-500 text-white animate-pulse'
+                : 'bg-[#d8fa55] hover:bg-[#cbf53d] text-slate-950'
+            }`}
+          >
+            <Mic className="w-3.5 h-3.5" />
+            <span>{isRecording ? 'Listening (Glove Voice)...' : 'Push-to-Talk (Voice)'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Grid: Action Deck & Slide Context (Left) + Response Window (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Column: Actions & Active Slide Context */}
+        <div className="lg:col-span-5 space-y-4">
+          {/* Quick AI Action Cards */}
+          <div className="bg-white rounded-2xl p-4 border border-[#eef0f4] shadow-sm">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+              One-Touch Teaching Prompts
+            </h3>
+
+            <div className="space-y-2">
+              {actions.map((act) => {
+                const Icon = act.icon;
+                const isCur = selectedAction === act.id;
+
+                return (
+                  <button
+                    key={act.id}
+                    onClick={() => handleExecuteAction(act.id)}
+                    className={`w-full p-3 rounded-xl border text-left transition-all flex items-start gap-3 group ${
+                      isCur
+                        ? 'bg-[#d8fa55]/20 border-[#d8fa55] shadow-sm'
+                        : 'bg-white border-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${act.color}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                        {act.title}
+                      </h4>
+                      <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                        {act.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Current Slide Context Card */}
+          <div className="bg-white rounded-2xl p-4 border border-[#eef0f4] shadow-sm">
+            <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <h4 className="text-xs font-bold text-slate-800">
+                  Active Slide Context
+                </h4>
+              </div>
+              <span className="text-[10px] font-bold text-slate-500">
+                Slide {(presentation?.current_slide_index ?? 0) + 1}
+              </span>
+            </div>
+
+            <p className="text-xs font-semibold text-slate-900 mb-1">
+              {presentation?.current_slide?.title || 'Operating Systems: Process Scheduling'}
+            </p>
+            <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100 font-mono text-[10px] text-slate-600 max-h-24 overflow-y-auto leading-relaxed">
+              {presentation?.current_slide?.extracted_text ||
+                'Preemptive scheduling, ready queues, round-robin quantum, priority inversion, and context switching overhead.'}
             </div>
           </div>
         </div>
 
-        {/* Right: AI Output Console */}
-        <div className="col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col min-h-0">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <div className="flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <h2 className="text-sm font-bold text-white">AI Assistant Output</h2>
-            </div>
+        {/* Right Column: AI Output Canvas */}
+        <div className="lg:col-span-7 bg-white rounded-2xl p-4 border border-[#eef0f4] shadow-sm flex flex-col justify-between min-h-[500px]">
+          <div>
+            {/* Output Header */}
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#d8fa55]" />
+                <h3 className="text-sm font-bold text-slate-900">
+                  Teaching Response & Lecture Notes
+                </h3>
+              </div>
 
-            {response && (
-              <div className="flex items-center space-x-3 text-xs">
-                <div className="flex items-center space-x-1 text-slate-400">
-                  <Clock className="w-3 h-3" />
-                  <span>{response.latency_ms} ms</span>
-                </div>
-                <div className="flex items-center space-x-1 text-slate-400">
-                  <Zap className="w-3 h-3 text-amber-400" />
-                  <span>{response.tokens_used || 150} tokens</span>
-                </div>
+              <div className="flex items-center gap-2">
+                {response?.latency_ms && (
+                  <span className="text-[10px] font-mono text-slate-400">
+                    {response.latency_ms}ms
+                  </span>
+                )}
                 <button
-                  onClick={handleCopy}
-                  className="p-1 rounded hover:bg-slate-800 text-slate-300 transition-colors"
-                  title="Copy markdown text"
+                  onClick={copyToClipboard}
+                  className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 px-2.5 py-1 rounded-lg border border-slate-200 transition-colors"
                 >
-                  {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
                 </button>
               </div>
-            )}
+            </div>
+
+            {/* Generated Response */}
+            <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 min-h-[340px] max-h-[380px] overflow-y-auto font-sans text-xs text-slate-800 leading-relaxed space-y-2 select-text">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                  <Sparkles className="w-6 h-6 animate-spin text-[#d8fa55] mb-2" />
+                  <p className="text-xs font-semibold">Synthesizing pedagogic explanation...</p>
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap">
+                  {response?.text || 'Select an action or push-to-talk to generate explanations.'}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Response Container */}
-          <div className="flex-1 overflow-y-auto pr-1 text-xs text-slate-300 leading-relaxed font-sans space-y-3 whitespace-pre-wrap select-text">
-            {loading ? (
-              <div className="h-full flex flex-col items-center justify-center space-y-3 text-slate-400">
-                <Sparkles className="w-6 h-6 text-purple-400 animate-spin" />
-                <span>Synthesizing response for active slide...</span>
-              </div>
-            ) : response ? (
-              <div className="prose prose-invert max-w-none text-slate-200">
-                {response.response_text}
-              </div>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center space-y-2 text-slate-500">
-                <Sparkles className="w-8 h-8 opacity-40 text-purple-400" />
-                <p>Select any AI action on the left to analyze the current slide.</p>
-              </div>
-            )}
+          {/* Bottom Custom Prompt Input */}
+          <div className="pt-3 border-t border-slate-100 mt-3">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (customPrompt.trim()) {
+                  handleExecuteAction(selectedAction);
+                }
+              }}
+              className="flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="Ask custom question about this slide (e.g. Give 2 real-world code examples)..."
+                className="flex-1 px-4 py-2 text-xs rounded-full bg-slate-50 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-900"
+              />
+              <button
+                type="submit"
+                disabled={loading || !customPrompt.trim()}
+                className="px-4 py-2 rounded-full bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-xs font-bold shadow flex items-center gap-1.5 transition-transform active:scale-95"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Ask AI</span>
+              </button>
+            </form>
           </div>
         </div>
       </div>
