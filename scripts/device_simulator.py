@@ -286,11 +286,12 @@ def main():
     parser = argparse.ArgumentParser(description="Manoeuvre Glove Hardware Simulator")
     parser.add_argument("--host", default="127.0.0.1", help="Host IP of backend")
     parser.add_argument("--port", type=int, default=8000, help="Port of backend")
+    parser.add_argument("--path", default="/ws/device", help="WebSocket path (/ws/device or /ws)")
     parser.add_argument("--smoke-test", action="store_true", help="Run automated test and exit")
     parser.add_argument("--interactive", action="store_true", help="Run interactive console")
     args = parser.parse_args()
 
-    sim = ManoeuvreDeviceSimulator(host=args.host, port=args.port)
+    sim = ManoeuvreDeviceSimulator(host=args.host, port=args.port, path=args.path)
 
     if args.smoke_test or (not args.interactive and not args.smoke_test):
         asyncio.run(sim.run_smoke_test())
