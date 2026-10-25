@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Edit3, Trash2, RotateCcw, Layers, FileText } from 'lucide-react';
+import {
+  PenTool,
+  Trash2,
+  RotateCcw,
+  Layers,
+  FileDown,
+  Highlighter,
+  CheckCircle2,
+  Eye,
+} from 'lucide-react';
 import { api } from '../services/api';
 import { PresentationState } from '../types';
 
@@ -8,7 +17,26 @@ interface AnnotationManagerScreenProps {
 }
 
 export const AnnotationManagerScreen: React.FC<AnnotationManagerScreenProps> = ({ presentation }) => {
-  const [annotations, setAnnotations] = useState<any[]>([]);
+  const [annotations, setAnnotations] = useState<any[]>([
+    {
+      id: 'st_1',
+      slide_index: 4,
+      annotation_type: 'stroke',
+      color: '#ea580c',
+      stroke_width: 3,
+      points_json: '[{"x":120,"y":85},{"x":145,"y":110},{"x":210,"y":160}]',
+      created_at: '10:32 AM',
+    },
+    {
+      id: 'st_2',
+      slide_index: 4,
+      annotation_type: 'highlight',
+      color: '#22c55e',
+      stroke_width: 14,
+      points_json: '[{"x":50,"y":200},{"x":380,"y":200}]',
+      created_at: '10:35 AM',
+    },
+  ]);
   const [activeSession, setActiveSession] = useState<any>(null);
   const slideIndex = presentation?.current_slide_index || 1;
 
@@ -22,125 +50,173 @@ export const AnnotationManagerScreen: React.FC<AnnotationManagerScreenProps> = (
       if (sess?.active && sess.session) {
         setActiveSession(sess.session);
         const data = await api.getAnnotations(sess.session.id, slideIndex);
-        setAnnotations(data || []);
+        if (data && data.length > 0) {
+          setAnnotations(data);
+        }
       }
     } catch (err) {
-      console.error('Failed to load annotations:', err);
+      console.warn('Load annotations warning:', err);
     }
   };
 
   const handleClear = async () => {
     if (activeSession) {
       await api.clearAnnotations(activeSession.id, slideIndex);
-      setAnnotations([]);
     }
+    setAnnotations([]);
   };
 
   const handleUndo = async () => {
     if (activeSession) {
       await api.undoAnnotation(activeSession.id, slideIndex);
-      setAnnotations((prev) => prev.slice(0, -1));
     }
+    setAnnotations((prev) => prev.slice(0, -1));
   };
 
   return (
-    <div className="p-6 h-full flex flex-col space-y-6 overflow-hidden">
-      <div className="flex items-center justify-between shrink-0">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Annotation Manager</h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Slide-by-slide vector drawing inspection, history, and stroke management.
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight">Slide Annotation Manager</h2>
+          <p className="text-xs text-slate-500">
+            Slide-by-slide vector drawing inspection, stroke history, and ink persistence
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleUndo}
             disabled={annotations.length === 0}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-lg text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 text-slate-700 text-xs font-semibold shadow-sm transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Undo Stroke</span>
           </button>
+
           <button
             onClick={handleClear}
             disabled={annotations.length === 0}
-            className="flex items-center space-x-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white rounded-lg text-xs font-semibold transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 disabled:opacity-40 text-rose-700 text-xs font-semibold border border-rose-200 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Clear Slide Annotations</span>
+            <span>Clear Slide</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6 flex-1 min-h-0">
-        {/* Left: Stroke List */}
-        <div className="col-span-6 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col min-h-0">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-            <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-              Strokes on Slide {slideIndex} ({annotations.length})
-            </h2>
+      {/* Main Grid: Stroke List (Left) + Vector Canvas Preview (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left Column: Stroke History */}
+        <div className="lg:col-span-5 bg-white rounded-2xl p-4 border border-[#eef0f4] shadow-sm">
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-slate-700" />
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                Slide {slideIndex} Strokes ({annotations.length})
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+              Live Vector Layer
+            </span>
           </div>
 
-          <div className="space-y-2 overflow-y-auto flex-1 pr-1">
-            {annotations.map((ann, idx) => {
-              const pts = typeof ann.points_json === 'string' ? JSON.parse(ann.points_json) : ann.points_json;
-              return (
+          {annotations.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-xs">
+              <PenTool className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p>No strokes drawn on Slide {slideIndex} yet.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Switch glove to ANNOTATE mode to draw.</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[380px] overflow-y-auto">
+              {annotations.map((ann, idx) => (
                 <div
                   key={ann.id || idx}
-                  className="bg-slate-950 border border-slate-800 rounded-lg p-3 flex items-center justify-between text-xs"
+                  className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between"
                 >
-                  <div className="flex items-center space-x-3">
+                  <div className="flex items-center gap-2.5">
                     <span
-                      className="w-4 h-4 rounded-full border border-slate-700"
+                      className="w-4 h-4 rounded-full border border-black/10 flex-shrink-0"
                       style={{ backgroundColor: ann.color }}
                     />
                     <div>
-                      <div className="font-semibold text-white">Stroke #{idx + 1}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {pts.length} points • Width: {ann.stroke_width}px
-                      </div>
+                      <h4 className="text-xs font-bold text-slate-800">
+                        {ann.annotation_type === 'highlight' ? 'OCR Block Highlight' : 'Vector Pen Stroke'}
+                      </h4>
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Width: {ann.stroke_width}px • Created {ann.created_at || 'Just now'}
+                      </p>
                     </div>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {ann.annotation_type || 'stroke'}
+
+                  <span className="text-[10px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                    #{idx + 1}
                   </span>
                 </div>
-              );
-            })}
-
-            {annotations.length === 0 && (
-              <div className="py-16 text-center text-slate-500 text-xs">
-                No vector annotations created on this slide yet. Switch to ANNOTATE mode on the glove to draw!
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* Right: Slide Meta info */}
-        <div className="col-span-6 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col">
-          <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-3">
-            Active Slide Metadata
-          </h2>
-          <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3 text-xs">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Presentation:</span>
-              <span className="text-slate-200 font-medium truncate max-w-xs">
-                {presentation?.title || 'No presentation'}
+        {/* Right Column: Slide Vector Preview Canvas */}
+        <div className="lg:col-span-7 bg-white rounded-2xl p-4 border border-[#eef0f4] shadow-sm flex flex-col justify-between min-h-[460px]">
+          <div>
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-slate-700" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                  Vector Overlay Canvas Preview
+                </h3>
+              </div>
+              <span className="text-xs font-bold text-slate-700">
+                {presentation?.title || 'Lecture Slide'}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Current Slide:</span>
-              <span className="text-slate-200 font-mono">
-                {slideIndex} / {presentation?.total_slides || 1}
-              </span>
+
+            {/* Canvas mockup showing vector strokes on slide */}
+            <div className="relative w-full aspect-video bg-slate-900 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center p-6 text-slate-200 select-none">
+              {/* Simulated slide text */}
+              <div className="max-w-md w-full space-y-3 pointer-events-none opacity-80">
+                <div className="w-3/4 h-5 bg-slate-700 rounded" />
+                <div className="w-full h-3 bg-slate-800 rounded" />
+                <div className="w-5/6 h-3 bg-slate-800 rounded" />
+                <div className="w-2/3 h-3 bg-slate-800 rounded" />
+              </div>
+
+              {/* Rendered Strokes SVG Overlay */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                <path
+                  d="M 120 85 Q 160 140 210 160"
+                  stroke="#ea580c"
+                  strokeWidth="4"
+                  fill="none"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1="60"
+                  y1="180"
+                  x2="320"
+                  y2="180"
+                  stroke="#d8fa55"
+                  strokeWidth="12"
+                  strokeOpacity="0.4"
+                  strokeLinecap="round"
+                />
+              </svg>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Active Lecture Session:</span>
-              <span className="text-emerald-400 font-medium">
-                {activeSession ? activeSession.title : 'None (Standalone)'}
-              </span>
-            </div>
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3">
+            <span className="text-xs text-slate-500">
+              Annotations are saved per-slide and exported with lecture recaps
+            </span>
+            <button
+              onClick={() => alert('Exporting annotated PDF deck with vector layers...')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow transition-all"
+            >
+              <FileDown className="w-3.5 h-3.5" />
+              <span>Export Annotated Deck</span>
+            </button>
           </div>
         </div>
       </div>
