@@ -1,6 +1,6 @@
 """
 Presentation Manager API Routes
-Handles PDF upload, slide parsing, active presentation selection, and navigation.
+Handles PPTX/PDF upload, slide parsing, active presentation selection, and navigation.
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
@@ -24,18 +24,28 @@ async def get_state():
 
 @router.post("/upload")
 async def upload_presentation(file: UploadFile = File(...), title: Optional[str] = Form(None)):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF presentations are currently supported.")
+    raw_filename = file.filename or "presentation.pptx"
+    ext = raw_filename.lower().rsplit(".", 1)[-1]
+    if ext not in ["pdf", "pptx", "ppt"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Supported presentation formats: .pptx, .ppt, and .pdf"
+        )
 
     uploads_dir = Path(settings.UPLOADS_DIR)
     uploads_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = uploads_dir / file.filename
+
+    # Sanitize filename for windows filesystem while preserving extension
+    base_name = raw_filename.rsplit(".", 1)[0]
+    safe_base = "".join(c for c in base_name if c.isalnum() or c in " ._-").strip() or "presentation"
+    filename = f"{safe_base}.{ext}"
+    dest_path = uploads_dir / filename
 
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    doc_title = title or file.filename.rsplit(".", 1)[0]
-    state = presentation_controller.load_pdf(str(dest_path), title=doc_title)
+    doc_title = title or base_name
+    state = presentation_controller.load_presentation(str(dest_path), title=doc_title)
     
     # Broadcast to desktop
     await connection_manager.broadcast_to_desktop({
